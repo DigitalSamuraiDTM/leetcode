@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strconv"
 )
 
@@ -15,76 +14,62 @@ type SudokuSolver struct {
 }
 
 type Place struct {
-	Num    int
 	Row    int
 	Column int
 }
 
 func (s *SudokuSolver) SolveIt() {
 	s.inputValidation()
-	s.setupAllowedNumber()
-	s.solveRecursively()
+	availablePlaces := s.setupAllowedNumber()
+	if s.isSudokuSolved() {
+		return
+	}
+	s.solveRecursively(availablePlaces, -1, 1)
 }
 
-func (s *SudokuSolver) solveRecursively() bool {
+func (s *SudokuSolver) solveRecursively(availablePlaces map[int]map[int][]Place, ceil int, number int) bool {
 
-	// find available places (if place was not found -> sudoku invalid and we need reverse)
-	number, places := s.findRandomAvailablePlace()
-	println(fmt.Sprintf("PLACES: %d, EMPTY: %d", len(places), s.emptyPlaces))
-	if number == nil {
-		return false
+	newCeil := ceil
+	newNumber := number
+	places := availablePlaces[newCeil][newNumber]
+	for true {
+		if newCeil == 8 {
+			newCeil = 0
+			newNumber++
+		} else {
+			newCeil++
+		}
+		places = availablePlaces[newCeil][newNumber]
+		if places != nil && len(places) != 0 {
+			break
+		}
 	}
-	for _, place := range places {
-		// try to setup
-		s.setNumber(*number, place.Row, place.Column)
 
-		// validate
-		setupedPlaces := s.setupAllowedNumber()
-
+	for _, value := range places {
+		if (*s.board)[value.Row][value.Column] != '.' || !s.isValidPlace(value.Row, value.Column, newNumber) {
+			continue
+		}
+		s.setNumber(newNumber, value.Row, value.Column)
 		if s.isSudokuSolved() {
 			return true
 		}
-		if s.solveRecursively() {
+		isSolved := s.solveRecursively(availablePlaces, newCeil, newNumber)
+		if isSolved {
 			return true
 		} else {
-			s.unsetNumber(*number, place.Row, place.Column)
-			for _, setupedPlace := range setupedPlaces {
-				s.unsetNumber(setupedPlace.Num, setupedPlace.Row, setupedPlace.Column)
-			}
+			//println(fmt.Sprintf("UNSET IN ROW: %d, COL: %d, NUM: %d", value.Row, value.Column, newNumber))
+			s.unsetNumber(newNumber, value.Row, value.Column)
 		}
 	}
 
-	// repeat
 	return s.isSudokuSolved()
 }
 
-func (s *SudokuSolver) findAllAvailablePlaces() {
-
-}
-
-// return num and valid places for it. if num is null -> sudoku invalid
-func (s *SudokuSolver) findRandomAvailablePlace() (num *int, places []Place) {
-	for ceilNumber, value := range s.validCeilMatrix {
-		for i := 1; i < 10; i++ {
-			if value[i] == true {
-				// num exist at this ceil
-				continue
-			} else {
-				// get available places
-				places = s.getAvailablePlacesInCeil(ceilNumber, i)
-				// if available places was founded then return
-				if len(places) != 0 {
-					num = &i
-					return
-				}
-			}
-		}
+func (s *SudokuSolver) setupAllowedNumber() (setupedList map[int]map[int][]Place) {
+	setupedList = make(map[int]map[int][]Place)
+	for i := 0; i < 9; i++ {
+		setupedList[i] = make(map[int][]Place)
 	}
-	// invalid sudoku
-	return nil, nil
-}
-
-func (s *SudokuSolver) setupAllowedNumber() (setupedList []Place) {
 	number := 1
 	for true {
 		isNeedRestart := false
@@ -94,7 +79,6 @@ func (s *SudokuSolver) setupAllowedNumber() (setupedList []Place) {
 				// if only one condition in ceil
 				if len(availablePlaces) == 1 {
 					s.setNumber(number, availablePlaces[0].Row, availablePlaces[0].Column)
-					setupedList = append(setupedList, availablePlaces...)
 					isNeedRestart = true
 					break
 				}
@@ -109,6 +93,17 @@ func (s *SudokuSolver) setupAllowedNumber() (setupedList []Place) {
 		if number == 10 {
 			// finish setup allowed places
 			break
+		}
+	}
+	for n := 1; n < 10; n++ {
+		for ceilNumber, value := range s.validCeilMatrix {
+			if value[n] == false {
+				availablePlaces := s.getAvailablePlacesInCeil(ceilNumber, n)
+				// if only one condition in ceil
+				if len(availablePlaces) > 1 {
+					setupedList[ceilNumber][n] = availablePlaces
+				}
+			}
 		}
 	}
 	return
@@ -126,7 +121,7 @@ func (s *SudokuSolver) getAvailablePlacesInCeil(numberOfCeil int,
 				// assumption, can we setup num at this place?
 				isValid := s.isValidPlace(row, col, number)
 				if isValid {
-					availablePlaces = append(availablePlaces, Place{Num: number, Row: row, Column: col})
+					availablePlaces = append(availablePlaces, Place{Row: row, Column: col})
 				}
 			}
 		}
